@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Cron: Check Pending PaySolutions Transactions -->
+        <record id="ir_cron_paysolutions_check_pending" model="ir.cron">
+            <field name="name">PaySolutions: Check Pending Transactions</field>
+            <field name="model_id" ref="payment.model_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_pending_paysolutions()</field>
+            <field name="interval_number">15</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+            <field name="user_id" ref="base.user_admin"/>
+        </record>
+    </data>
+</odoo>

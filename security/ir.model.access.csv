@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_payment_provider_paysolutions_user,payment.provider.paysolutions.user,payment.model_payment_provider,base.group_user,1,0,0,0
+access_payment_provider_paysolutions_manager,payment.provider.paysolutions.manager,payment.model_payment_provider,account.group_account_manager,1,1,1,1
+access_payment_transaction_paysolutions_user,payment.transaction.paysolutions.user,payment.model_payment_transaction,base.group_user,1,1,1,0
+access_payment_transaction_paysolutions_public,payment.transaction.paysolutions.public,payment.model_payment_transaction,base.group_public,1,1,1,0
+access_payment_method_paysolutions,payment.method.paysolutions,payment.model_payment_method,base.group_user,1,0,0,0

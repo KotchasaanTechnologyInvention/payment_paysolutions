@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record id="payment_method_paysolutions" model="payment.method">
+        <field name="name">PaySolutions</field>
+        <field name="code">paysolutions</field>
+        <field name="sequence">10</field>
+        <field name="active">True</field>
+        <field name="image" type="base64" file="payment_paysolutions/static/src/img/payment_method.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_provider_paysolutions" model="payment.provider">
+        <field name="name">Pay Solutions</field>
+        <field name="image_128" type="base64" file="payment_paysolutions/static/src/img/paysolutions_logo.png"/>
+        <field name="code">paysolutions</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="state">disabled</field>
+        <field name="is_published">true</field>
+        <field name="sequence">350</field>
+
+        <field name="paysolutions_merchant_id">12345678</field>
+        <field name="paysolutions_secret_key">test_secret_key_01</field>
+        <field name="paysolutions_api_key">test_api_key_01</field>
+
+        <field name="payment_method_ids" eval="[(6, 0, [ref('payment_method_paysolutions')])]"/>
+
+        <field name="available_currency_ids"
+               eval="[Command.set([
+                         ref('base.THB'),
+                         ref('base.USD'),
+                         ref('base.JPY'),
+                         ref('base.SGD'),
+                         ref('base.HKD'),
+                         ref('base.EUR'),
+                         ref('base.GBP'),
+                         ref('base.AUD'),
+                         ref('base.CHF'),
+                     ])]"
+        />
+
+        <field name="available_country_ids" eval="False"/>
+
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+
+        <field name="pre_msg">
+            <![CDATA[
+            <p>You will be redirected to Pay Solutions payment page to complete your payment securely.</p>
+            ]]>
+        </field>
+        <field name="pending_msg">
+            <![CDATA[
+            <p>Your payment is being processed. You will receive a confirmation shortly.</p>
+            ]]>
+        </field>
+        <field name="done_msg">
+            <![CDATA[
+            <p>Your payment has been successfully processed. Thank you!</p>
+            ]]>
+        </field>
+        <field name="cancel_msg">
+            <![CDATA[
+            <p>Your payment has been cancelled. Please try again or contact us if you need assistance.</p>
+            ]]>
+        </field>
+    </record>
+
+</odoo>

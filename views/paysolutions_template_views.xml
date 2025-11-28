@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- === PROVIDER CONFIGURATION VIEW === -->
+    <record id="provider_form_paysolutions_improved" model="ir.ui.view">
+        <field name="name">provider.form.paysolutions.improved</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <xpath expr='//group[@name="provider_credentials"]' position='after'>
+                <group string="PaySolutions Configuration" invisible="code != 'paysolutions'">
+                    <group>
+                        <field name="paysolutions_merchant_id"
+                               required="code == 'paysolutions' and state != 'disabled'"
+                               placeholder="8-digit merchant ID"/>
+                        <field name="paysolutions_secret_key" password="True"
+                               required="code == 'paysolutions' and state != 'disabled'"
+                               placeholder="Contact staff to request secretkey"/>
+                        <field name="paysolutions_api_key" password="True"
+                               required="code == 'paysolutions' and state != 'disabled'"
+                               placeholder="Contact staff for apikey"/>
+                    </group>
+                    <group>
+                        <field name="paysolutions_payment_url"
+                               required="code == 'paysolutions' and state != 'disabled'"
+                               placeholder="https://payments.paysolutions.asia/payment"/>
+                        <field name="paysolutions_webhook_url" required="code == 'paysolutions' and state != 'disabled'"/>
+                        <field name="paysolutions_return_url" required="code == 'paysolutions' and state != 'disabled'"/>
+                    </group>
+                </group>
+                <div class="text-muted mt-2">
+                    <small>
+                        <strong>Webhook URL:</strong> Copy this URL to your PaySolutions merchant dashboard.<br/>
+                        <strong>Return URL:</strong> Copy this URL to your PaySolutions merchant dashboard.
+                    </small>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- === PAYSOLUTIONS REDIRECT FORM TEMPLATE === -->
+    <template id="paysolutions_redirect_form" name="PaySolutions Redirect Form">
+        <div class="paysolutions-redirect-form">
+
+            <!-- Loading animation -->
+            <div class="text-center mb-4" id="paysolutions_loading">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h4 class="text-primary">Redirecting to PaySolutions...</h4>
+                <p class="text-muted">
+                    Please wait while we redirect you to PaySolutions secure payment page.
+                    <br/>
+                    <small>If you are not redirected automatically within 5 seconds, click the button below.</small>
+                </p>
+                <button type="button" class="btn btn-primary btn-lg"
+                        onclick="document.getElementById('paysolutions_payment_form').submit();">
+                    <i class="fa fa-credit-card me-2"></i>
+                    Continue to PaySolutions
+                </button>
+            </div>
+
+            <!-- Auto-submit form to PaySolutions -->
+            <form method="post"
+                  t-att-action="api_url"
+                  target="_top"
+                  class="d-none"
+                  id="paysolutions_payment_form"
+                  name="paysolutions_payment_form">
+
+                <!-- Required PaySolutions fields -->
+                <input type="hidden" name="merchantid" t-att-value="merchantid"/>
+                <input type="hidden" name="refno" t-att-value="refno"/>
+                <input type="hidden" name="total" t-att-value="total"/>
+                <input type="hidden" name="productdetail" t-att-value="productdetail"/>
+                <input type="hidden" name="customeremail" t-att-value="customeremail"/>
+                <input type="hidden" name="lang" t-att-value="paysolutions_lang"/>
+                <input type="hidden" name="cc" t-att-value="cc"/>
+            </form>
+
+            <!-- Auto-submit script with fallback -->
+            <script type="text/javascript">
+                document.addEventListener('DOMContentLoaded', function() {
+                    var form = document.getElementById('paysolutions_payment_form');
+                    var loading = document.getElementById('paysolutions_loading');
+                    var countdown = 5;
+
+                    // Auto-submit after 2 seconds
+                    setTimeout(function() {
+                        if (form) {
+                            form.submit();
+                        }
+                    }, 2000);
+
+                    // Handle form submission errors
+                    form.addEventListener('error', function() {
+                        loading.innerHTML = '&lt;div class="alert alert-danger"&gt;&lt;i class="fa fa-exclamation-triangle"&gt;&lt;/i&gt; Error submitting payment form. Please try again.&lt;/div&gt;';
+                    });
+                });
+
+                // Prevent double submission
+                window.addEventListener('beforeunload', function() {
+                    var form = document.getElementById('paysolutions_payment_form');
+                    if (form) {
+                        form.style.display = 'none';
+                    }
+                });
+            </script>
+
+            <!-- Fallback for no JavaScript -->
+            <noscript>
+                <div class="alert alert-warning text-center">
+                    <strong>JavaScript is disabled.</strong>
+                    Please click the button below to continue to PaySolutions.
+                    <br/>
+                    <form method="post" t-att-action="api_url" target="_top" class="mt-3">
+                        <input type="hidden" name="merchantid" t-att-value="merchantid"/>
+                        <input type="hidden" name="refno" t-att-value="refno"/>
+                        <input type="hidden" name="total" t-att-value="total"/>
+                        <input type="hidden" name="productdetail" t-att-value="productdetail"/>
+                        <input type="hidden" name="customeremail" t-att-value="customeremail"/>
+                        <input type="hidden" name="lang" t-att-value="paysolutions_lang"/>
+                        <input type="hidden" name="cc" t-att-value="cc"/>
+                        <input type="submit" value="Continue to PaySolutions" class="btn btn-primary btn-lg"/>
+                    </form>
+                </div>
+            </noscript>
+        </div>
+    </template>
+
+    <!-- === PAYMENT STATUS PAGE ENHANCEMENT === -->
+    <template id="paysolutions_status_enhancement" name="PaySolutions Status Enhancement"
+              inherit_id="payment.payment_status" primary="True">
+        <xpath expr="//div[@name='o_payment_status']" position="inside">
+            <!-- PaySolutions specific status information -->
+            <div t-if="tx and tx.provider_code == 'paysolutions'" class="mt-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fa fa-info-circle me-2"></i>PaySolutions Payment Details</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>PaySolutions Reference:</strong> <span t-field="tx.paysolutions_refno"/></p>
+                                <p><strong>Transaction State:</strong>
+                                    <span t-field="tx.state"
+                                          t-attf-class="badge #{tx.state == 'done' and 'badge-success' or tx.state == 'pending' and 'badge-warning' or 'badge-danger'}"/>
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p t-if="tx.paysolutions_refno"><strong>Ref No.:</strong> <span t-field="tx.paysolutions_refno"/></p>
+                                <p t-if="tx.state_message"><strong>Status Message:</strong> <span t-field="tx.state_message"/></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>
