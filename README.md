@@ -1,4 +1,4 @@
-# PaySolution Payment Provider for Odoo 18.0
+# Pay Solution Payment Provider for Odoo 18.0
 
 A comprehensive payment Provider integration module for Pay Solution, supporting secure online payments for Thailand and Southeast Asia markets.
 
