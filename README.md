@@ -2,7 +2,7 @@
 
 A comprehensive payment Provider integration module for Pay Solution, supporting secure online payments for Thailand and Southeast Asia markets.
 
-## 🌟 Features
+## Features
 
 ### Payment Methods Support
 
@@ -25,20 +25,20 @@ A comprehensive payment Provider integration module for Pay Solution, supporting
 - **Real-time Notifications**: Webhook integration for instant payment updates
 - **Comprehensive Logging**: Full transaction audit trail
 
-## 📋 Requirements
+## Requirements
 
 - **Odoo**: Version 18.0
 - **PaySolutions Account**: Merchant account from https://paysolutions.asia/
 - **SSL Certificate**: Required for webhook endpoints (HTTPS)
 
-## 🚀 Installation
+## Installation
 
 1. Download the module to your Odoo addons directory
 2. Restart Odoo to recognize the new module
 3. Go to Apps menu, search for "Pay Solutions"
 4. Click Install
 
-## ⚙️ Configuration
+## Configuration
 
 ### 1. PaySolution Account Setup
 
