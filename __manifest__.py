@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Pay Solutions Payment Provider',
-    'version': '18.0.1.0.0',
+    'version': '19.0.1.0.0',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept payments via PaySolutions: Cards, PromptPay, Internet Banking, E-Wallets & Installments for Thai market',
     'description': """
-PaySolutions Payment Provider for Odoo 18
+PaySolutions Payment Provider for Odoo 19
 =========================================
 
 Integrate PaySolutions - Thailand's leading payment gateway - with your Odoo eCommerce 
@@ -66,7 +66,7 @@ Configuration
 Requirements
 ------------
 
-* Odoo 18.0
+* Odoo 19.0
 * PaySolutions merchant account (https://paysolutions.asia/)
 * SSL certificate (HTTPS) for webhook endpoints
 

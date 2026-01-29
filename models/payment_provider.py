@@ -216,24 +216,189 @@ class PaymentProviderPaySolutions(models.Model):
             raise ValidationError(_("PaySolutions API request failed: %s") % str(e))
 
     def query_paysolutions_payment_status(self, transaction_reference):
-        """Query PaySolutions for payment status."""
         self.ensure_one()
-        try:
-            query_data = {
-                'merchantid': self.paysolutions_merchant_id,
-                'refno': transaction_reference
-            }
 
-            result = self._make_paysolutions_request('/order/orderdetailpost', query_data)
+        # Prepare API request
+        url = f"{self.paysolutions_api_url.rstrip('/')}/order/orderdetailpost"
+
+        merchant_id_short = self.paysolutions_merchant_id[-5:] if self.paysolutions_merchant_id else ''
+
+        headers = {
+            'Content-Type': 'application/json',
+            'merchantID': merchant_id_short,
+            'merchantSecretKey': self.paysolutions_secret_key,
+            'apikey': self.paysolutions_api_key,
+        }
+
+        query_data = {
+            'merchantid': merchant_id_short,
+            'refno': transaction_reference,
+        }
+
+        _logger.info("Result Test Inquiry  %s  %s", headers, query_data)
+
+        try:
+            _logger.info("Querying PaySolutions status for refno: %s", transaction_reference)
+
+            response = requests.post(url, json=query_data, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            result = response.json()
+            _logger.info("Inquiry data: %s", result)
+
+            if isinstance(result, list):
+                if not result:
+                    _logger.warning("PaySolutions API returned empty list for refno %s", transaction_reference)
+                    return None
+                result = result[0]
+                _logger.info("Extracted data from list: %s", result)
+
+            if not isinstance(result, dict):
+                _logger.error("PaySolutions API returned unexpected format: %s (type: %s)", result, type(result))
+                return None
 
             return {
-                'result': result.get('status', 'unknown'),
-                'refno': result.get('refno', transaction_reference),
-                'message': result.get('message', ''),
-                'paymentid': result.get('payment_id', ''),
+                'status': result.get('Status', 'unknown'),  # Status code (CP, PE, FL, CN)
+                'status_name': result.get('StatusName', ''),  # Full status name
+                'refno': result.get('ReferenceNo', transaction_reference),
+                'order_no': result.get('OrderNo', ''),
+                'total': float(result.get('Total', 0.0)),
+                'merchantid': str(result.get('MerchantID', '')),
             }
+
+        except requests.exceptions.HTTPError as e:
+            _logger.error("PaySolutions API HTTP error %s for refno %s",
+                          e.response.status_code if hasattr(e, 'response') else 'unknown',
+                          transaction_reference)
+            if hasattr(e, 'response') and e.response is not None:
+                _logger.error("Response body: %s", e.response.text)
+            return None
+        
+        except (ValueError, TypeError, KeyError) as e:
+            _logger.error(
+                "PaySolutions API response parsing error for refno %s: %s",
+                transaction_reference, str(e)
+            )
+            return None                 
 
         except Exception as e:
             _logger.error("Failed to query PaySolutions status for %s: %s",
                           transaction_reference, e)
             return None
+        
+    # === PAYSOLUTIONS STATISTICS & REPORTING ===
+
+    def action_view_paysolutions_transactions(self):
+        self.ensure_one()
+        
+        if self.code != 'paysolutions':
+            return
+        
+        # Count transactions by state
+        Transaction = self.env['payment.transaction']
+        
+        total_count = Transaction.search_count([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions')
+        ])
+        
+        pending_count = Transaction.search_count([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions'),
+            ('state', '=', 'pending')
+        ])
+        
+        done_count = Transaction.search_count([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions'),
+            ('state', '=', 'done')
+        ])
+        
+        error_count = Transaction.search_count([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions'),
+            ('state', '=', 'error')
+        ])
+        
+        canceled_count = Transaction.search_count([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions'),
+            ('state', '=', 'cancel')
+        ])
+        
+        _logger.info(
+            "PaySolutions stats for provider %s: Total=%s, Pending=%s, Done=%s, Error=%s, Canceled=%s",
+            self.name, total_count, pending_count, done_count, error_count, canceled_count
+        )
+        
+        return {
+            'name': _('PaySolutions Transactions'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'payment.transaction',
+            'view_mode': 'list,kanban,form',
+            'domain': [
+                ('provider_id', '=', self.id),
+                ('provider_code', '=', 'paysolutions')
+            ],
+            'context': {
+                'default_provider_id': self.id,
+                'search_default_group_by_state': 1,
+            }
+        }
+
+    def action_check_pending_paysolutions_now(self):
+        self.ensure_one()
+        
+        if self.code != 'paysolutions':
+            return
+        
+        # Find all pending transactions for this provider
+        pending_txs = self.env['payment.transaction'].search([
+            ('provider_id', '=', self.id),
+            ('provider_code', '=', 'paysolutions'),
+            ('state', '=', 'pending')
+        ])
+        
+        if not pending_txs:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('No Pending Transactions'),
+                    'message': _('There are no pending PaySolutions transactions to check.'),
+                    'type': 'info',
+                    'sticky': False,
+                }
+            }
+        
+        # Check status for each pending transaction
+        checked_count = 0
+        updated_count = 0
+        
+        for tx in pending_txs:
+            try:
+                result = self.query_paysolutions_payment_status(tx.paysolutions_refno)
+                
+                if result:
+                    old_state = tx.state
+                    tx._process_paysolutions_status_update(result, timeout_minutes=None, source='manual')
+                    
+                    if tx.state != old_state:
+                        updated_count += 1
+                    
+                    checked_count += 1
+                    
+            except Exception as e:
+                _logger.error("Error checking PaySolutions tx %s: %s", tx.reference, e)
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Status Check Complete'),
+                'message': _('Checked %s transactions, %s updated.') % (checked_count, updated_count),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+

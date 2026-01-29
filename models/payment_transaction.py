@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 class PaymentTransaction(models.Model):
-    _inherit = 'payment.transaction'
+    _inherit = ['payment.transaction','mail.thread']
 
     # === PAYSOLUTIONS-SPECIFIC FIELDS ===
 
@@ -46,6 +46,22 @@ class PaymentTransaction(models.Model):
         readonly=True
     )
 
+    log_ids = fields.One2many(
+        'payment.transaction.log',
+        'transaction_id',
+        string='Logs'
+    )
+
+    def _add_log(self, message, level='info', source='api'):
+        self.ensure_one()
+        self.env['payment.transaction.log'].create({
+            'transaction_id': self.id,
+            'state_at_log': self.state,
+            'level': level,
+            'source': source,
+            'message': message,
+        })
+
     def action_set_to_canceled(self):
         for tx in self:
             tx._set_canceled()
@@ -66,6 +82,25 @@ class PaymentTransaction(models.Model):
         # Validate transaction state before initiating
         if self.state not in ('draft', 'pending'):
             raise ValidationError(_("Transaction must be in draft or pending state to initiate payment"))
+        
+        group_key = self._get_so_group_key()
+        if group_key:
+            old_txs = self.search([
+                ('id', '!=', self.id),
+                ('provider_code', '=', 'paysolutions'),
+                ('state', '=', 'pending'),
+                ('sale_order_ids.name', '=like', f'{group_key}%'),
+            ])
+
+            for tx in old_txs:
+                _logger.warning(
+                    "Invalidate old PaySolutions tx %s because new tx %s was created",
+                    tx.reference, self.reference
+                )
+                tx._set_canceled(_(
+                    "A new payment process has been initiated. "
+                    "Please proceed with the latest transaction only."
+                ))
 
         # Use existing reference as refno instead of generating new one
         if not self.paysolutions_refno:
@@ -74,7 +109,11 @@ class PaymentTransaction(models.Model):
             _logger.info("Setting paysolutions_refno to existing reference: %s", self.paysolutions_refno)
 
         if self.state == 'draft':
-            self._set_pending(_("PaySolutions payment initiated"))
+            self._set_pending()
+            self.message_post(body=_("PaySolutions payment initiated"))
+            self.write({
+                'provider_reference': self.paysolutions_refno,
+            })
 
         # Generate PaySolutions redirect data
         redirect_data = self._get_paysolutions_payment_data()
@@ -188,6 +227,10 @@ class PaymentTransaction(models.Model):
 
         _logger.info("Processing PaySolutions webhook for transaction %s", self.reference)
         _logger.debug("PaySolutions webhook data: %s", pprint.pformat(webhook_data))
+        self._add_log(
+            f"Webhook received:\n{pprint.pformat(webhook_data)}",
+            source='webhook'
+        )
 
         try:
             # Validate webhook data
@@ -208,38 +251,29 @@ class PaymentTransaction(models.Model):
             if 'cardtype' in webhook_data:
                 self.paysolutions_cardtype = webhook_data['cardtype']
 
-
-            # Process transaction state based on PaySolutions response
-            status = webhook_data.get('status', '').lower()
-
-            if status in ['success', '1', 'approved', 'complete', 'cp', 'y']:
-                self._set_done(_("PaySolutions: Payment completed successfully"))
-                _logger.info("PaySolutions payment completed successfully: %s (Payment ID: %s)",
-                             self.reference, self.paysolutions_payment_id)
-
-            elif status in ['pending', 'processing']:
-                self._set_pending(_("PaySolutions: Payment pending confirmation"))
-                _logger.info("PaySolutions payment pending: %s", self.reference)
-
-            elif status in ['failed', 'error', 'rejected', '0']:
-                error_msg = webhook_data.get('message', 'Payment failed')
-                self._set_error(f"PaySolutions: {error_msg}")
-                _logger.warning("PaySolutions payment failed: %s - %s", self.reference, error_msg)
-
-            elif status in ['cancelled', 'canceled']:
-                self._set_canceled(_("PaySolutions: Payment cancelled by user"))
-                _logger.info("PaySolutions payment cancelled: %s", self.reference)
-
-            else:
-                _logger.warning("Unknown PaySolutions status: %s for transaction %s",
-                                status, self.reference)
-                self._set_error(f"PaySolutions: Unknown payment status: {status}")
-            _logger.info("Paysolutions webhook processed successfully for %s with status %s", self.reference, status)
+            self._add_log("Webhook received", source='webhook')
+        
+            self._process_paysolutions_status_update(
+                webhook_data, 
+                timeout_minutes=None,
+                source='webhook'
+            )
+            
+            _logger.info(
+                "PaySolutions webhook processed successfully for %s (Final state: %s)",
+                self.reference, self.state
+            )
 
         except Exception as e:
             _logger.error("Error processing PaySolutions webhook for %s: %s",
-                          self.reference, e)
+                        self.reference, e, exc_info=True)
             self._set_error(f"PaySolutions webhook processing error: {str(e)}")
+            self.message_post(body=f"PaySolutions webhook processing error: {str(e)}")
+            self._add_log(
+                f"Webhook processing FAILED: {str(e)}", 
+                level='error', 
+                source='webhook'
+            )
             raise
 
     def handle_paysolutions_return(self, return_data):
@@ -250,6 +284,10 @@ class PaymentTransaction(models.Model):
         self.ensure_one()
 
         _logger.info("Processing PaySolutions return for transaction %s", self.reference)
+        self._add_log(
+            f"User returned from PaySolutions:\n{return_data}",
+            source='return'
+        )
 
         # Only process return if transaction is still pending
         if self.state == 'pending':
@@ -524,48 +562,254 @@ class PaymentTransaction(models.Model):
             ], limit=1)
 
         return method_line
-
-    @api.model
-    def _cron_check_pending_paysolutions(self):
-        timeout_minutes = 30
+    
+    def _get_pending_paysolutions_transactions(self, timeout_minutes=30):
         cutoff_time = fields.Datetime.now() - timedelta(minutes=timeout_minutes)
-
-        pending_txs = self.search([
+        return self.search([
             ('provider_code', '=', 'paysolutions'),
             ('state', '=', 'pending'),
             ('create_date', '<', cutoff_time)
         ])
 
+    def _process_paysolutions_status_update(self, result, timeout_minutes=None, source='cron'):
+        self.ensure_one()
+        if not result:
+            error_msg = "Payment verification failed - API/webhook returned None"
+            if timeout_minutes:
+                error_msg = f"Payment verification failed after {timeout_minutes} minutes"
+            
+            self._set_error(_(error_msg))
+            self.message_post(body=_(error_msg))
+            self._add_log(error_msg, level='error', source='cron')
+            _logger.error("PaySolutions tx %s verification failed - result is None", self.reference)
+            return
+
+        status = result.get('status', '').upper()
+        status_name = result.get('status_name', '')
+
+        _logger.info("PaySolutions tx %s current status: %s (%s)", self.reference, status_name, status)
+
+        source = 'webhook' if timeout_minutes is None else 'cron'
+
+        # SUCCESS STATUSES
+        if status in ['CP', 'Y', 'TC']:
+            # CP = Completed
+            # Y = Completed (alternative)
+            # TC = Test Complete
+            if source == 'webhook':
+                self._set_done()
+                self.message_post(body=_("PaySolutions: Payment completed successfully"))
+                _logger.info(
+                    "PaySolutions payment completed: %s (Status: %s, Payment ID: %s)",
+                    self.reference, status_name, self.paysolutions_payment_id or 'N/A'
+                )
+                self._add_log(
+                    f"Payment COMPLETED (status={status}, name={status_name})",
+                    source='webhook'
+                )
+            else:
+                self._set_done()
+                self.message_post(body=_("Payment verified via status check"))
+                _logger.info("PaySolutions tx %s completed (verified by cron)", self.reference)
+                self._add_log(
+                    f"Confirmed payment COMPLETED ({status} - {status_name})", 
+                    source=source
+                )
+
+        # FAILED/REJECTED STATUSES
+        elif status in ['RE', 'VR', 'PF']:
+            # RE = Rejected
+            # VR = VBV Rejected
+            # PF = Payment Failed
+            if source == 'webhook':
+                error_msg = result.get('message') or status_name or 'Payment rejected'
+                self._set_canceled()
+                self.message_post(body=_("PaySolutions: %s") % error_msg)
+                _logger.warning(
+                    "PaySolutions payment rejected: %s (Status: %s - %s)",
+                    self.reference, status, error_msg
+                )
+                self._add_log(
+                    f"Payment CANCELLED (status={status}, reason={error_msg})",
+                    level='warning',
+                    source='webhook'
+                )
+            else:
+                self._set_canceled()
+                self.message_post(body=_("Payment rejected: %s") % (status_name or status))
+                _logger.warning("PaySolutions tx %s timed out with status %s", self.reference, status)
+                self._add_log(
+                    f"Marked CANCELLED ({status} - {status_name})", 
+                    level='warning', 
+                    source=source
+                )
+
+        # CANCELLED STATUS
+        elif status == 'C':
+            # C = Cancel
+            if source == 'webhook':
+                self._set_canceled()
+                self.message_post(body=_("PaySolutions: Payment cancelled by user"))
+                _logger.info(
+                    "PaySolutions payment cancelled: %s (Status: %s)",
+                    self.reference, status_name
+                )
+            else:
+                self._set_canceled()
+                self.message_post(body=_("Payment cancelled by user"))
+                _logger.warning("PaySolutions tx %s cancelled by user", self.reference)
+
+        # REFUND STATUSES
+        elif status in ['RF', 'VO']:
+            # RF = Refund
+            # VO = Voided
+            # Note: Original payment was successful, now refunded
+            if source == 'webhook':
+                self._set_done()
+                self.message_post(body=_("PaySolutions: Payment completed (later refunded)"))
+                _logger.info(
+                    "PaySolutions payment refunded: %s (Status: %s, Payment ID: %s)",
+                    self.reference, status_name, self.paysolutions_payment_id or 'N/A'
+                )
+            else:
+                self._set_done()
+                self.message_post(body=_("Payment completed (later refunded): %s") % status_name)
+
+        # IN-PROGRESS / PENDING STATUSES
+        elif status in ['NS', 'N', 'VC', 'RR', 'HO']:
+            # NS = Not Submit (customer at payment page)
+            # N = Not Submit / UnPaid
+            # VC = VBV Checking
+            # RR = Request Refund (in progress)
+            # HO = Hold (under review)
+            if source == 'webhook':
+                self._set_pending()
+                self.message_post(body=_("PaySolutions: Payment in progress"))
+                _logger.info(
+                    "PaySolutions payment in progress: %s (Status: %s)",
+                    self.reference, status_name
+                )
+            else:
+                if timeout_minutes:
+                    _logger.info(
+                        "PaySolutions tx %s still in progress after %s minutes: %s, will check again",
+                        self.reference, timeout_minutes, status_name
+                    )
+                    self._add_log(
+                        f"Still PENDING after {timeout_minutes}min (status={status}, name={status_name})", 
+                        level='warning', 
+                        source=source
+                    )
+
+        # UNKNOWN STATUS
+        else:
+            if source == 'webhook':
+                _logger.warning(
+                    "Unknown PaySolutions status: %s (%s) for transaction %s",
+                    status, status_name, self.reference
+                )
+                self._set_error(_("PaySolutions: Unknown payment status: %s") % (status_name or status))
+                self.message_post(body=_("PaySolutions: Unknown payment status: %s") % (status_name or status))
+                self._add_log(
+                    f"UNKNOWN STATUS received: {status} / {status_name}",
+                    level='error',
+                    source='webhook'
+                )
+            else:
+                error_msg = f"Payment not completed within {timeout_minutes} minutes. Status: {status_name or status}"
+                self._set_error(_(error_msg))
+                self.message_post(body=_(error_msg))
+                self._add_log(
+                    f"UNKNOWN/ERROR STATUS: {status} / {status_name}", 
+                    level='error', 
+                    source=source
+                )
+
+    def _get_so_group_key(self):
+        self.ensure_one()
+        if not self.sale_order_ids:
+            return False
+        return self.sale_order_ids[0].name
+
+    @api.model
+    def _cron_check_pending_paysolutions(self):
+        timeout_minutes = 30
+        pending_txs = self._get_pending_paysolutions_transactions(timeout_minutes)
+
         _logger.info("Checking %s pending PaySolutions transactions", len(pending_txs))
 
         for tx in pending_txs:
             try:
-                # Query status from PaySolutions API
-                result = tx.provider_id.query_paysolutions_payment_status(
-                    tx.paysolutions_refno
-                )
+                tx._add_log("Cron: start checking PaySolutions status", source='cron')
+                result = tx.provider_id.query_paysolutions_payment_status(tx.paysolutions_refno)
 
-                if result:
-                    status = result.get('result', '').upper()
-
-                    if status in ['CP', 'Y']:
-                        tx._set_done(_("Payment verified via status check"))
-                        _logger.info("PaySolutions tx %s completed (verified by cron)",
-                                     tx.reference)
-                    else:
-                        tx._set_error(_(
-                            "Payment not completed within %s minutes. Status: %s"
-                        ) % (timeout_minutes, status))
-                        _logger.warning("PaySolutions tx %s timed out with status %s",
-                                        tx.reference, status)
-                else:
-                    tx._set_error(_(
-                        "Payment verification failed after %s minutes"
-                    ) % timeout_minutes)
-                    _logger.error("PaySolutions tx %s verification failed", tx.reference)
+                tx._process_paysolutions_status_update(result, timeout_minutes)
 
             except Exception as e:
-                _logger.error("Error checking PaySolutions tx %s: %s",
-                              tx.reference, e)
+                _logger.error("Error checking PaySolutions tx %s: %s", tx.reference, e)
+                tx._add_log(f"Cron exception: {str(e)}", level='error', source='cron')
 
         _logger.info("Finished checking pending PaySolutions transactions")
+
+    def action_paysolutions_manual_check(self):
+        self.ensure_one()
+        if self.provider_code != 'paysolutions':
+            raise UserError("This action is only for PaySolutions.")
+
+        result = self.provider_id.query_paysolutions_payment_status(self.paysolutions_refno)
+
+        self._process_paysolutions_status_update(
+            result,
+            timeout_minutes=None,
+            source='manual'
+        )
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Status Checked'),
+                'message': _('Transaction status has been updated.'),
+                'sticky': False,
+            }
+        }
+
+
+class PaymentTransactionLog(models.Model):
+    _name = 'payment.transaction.log'
+    _description = 'Payment Transaction Log'
+    _order = 'create_date desc'
+
+    transaction_id = fields.Many2one(
+        'payment.transaction',
+        required=True,
+        ondelete='cascade',
+        index=True
+    )
+
+    state_at_log = fields.Selection(
+        selection=lambda self: self.env['payment.transaction']._fields['state'].selection,
+    )
+
+    source = fields.Selection(
+        [
+            ('cron', 'Cron'),
+            ('webhook', 'Webhook'),
+            ('return', 'Return'),
+            ('redirect', 'Redirect'),
+            ('api', 'API'),
+        ],
+        default='api'
+    )
+
+    level = fields.Selection(
+        [
+            ('info', 'Info'),
+            ('warning', 'Warning'),
+            ('error', 'Error'),
+        ],
+        default='info'
+    )
+
+    message = fields.Text()
+    create_date = fields.Datetime(readonly=True)
