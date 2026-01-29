@@ -4,3 +4,5 @@ access_payment_provider_paysolutions_manager,payment.provider.paysolutions.manag
 access_payment_transaction_paysolutions_user,payment.transaction.paysolutions.user,payment.model_payment_transaction,base.group_user,1,1,1,0
 access_payment_transaction_paysolutions_public,payment.transaction.paysolutions.public,payment.model_payment_transaction,base.group_public,1,1,1,0
 access_payment_method_paysolutions,payment.method.paysolutions,payment.model_payment_method,base.group_user,1,0,0,0
+access_payment_transaction_log_user,payment.transaction.log user,model_payment_transaction_log,base.group_user,1,0,0,0
+access_payment_transaction_log_manager,payment.transaction.log manager,model_payment_transaction_log,account.group_account_manager,1,1,1,0

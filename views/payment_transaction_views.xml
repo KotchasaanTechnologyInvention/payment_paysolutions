@@ -8,22 +8,77 @@
         <field name="arch" type="xml">
 
             <xpath expr="//header" position="inside">
+                <button name="action_paysolutions_manual_check"
+                        string="Verify Payment Status (PaySolutions)"
+                        type="object"
+                        class="oe_highlight"
+                        invisible="provider_code != 'paysolutions'"/>
+
                 <button name="action_set_to_canceled"
-                        string="Set to Canceled"
+                        string="Cancel Transaction"
+                        confirm="Are you sure you want to cancel this transaction?"
                         type="object"
                         class="btn btn-secondary"
-                        invisible="provider_code != 'paysolutions' and state not in ('pending', 'draft', 'error')"/>
+                        invisible="provider_code != 'paysolutions' or state not in ('draft', 'pending', 'error')"/>
             </xpath>
 
-            <xpath expr="//sheet" position="inside">
-                <group string="Pay Solutions Return Info" invisible="provider_code != 'paysolutions'">
-                    <field name="paysolutions_payment_id" string="orderno"/>
-                    <field name="paysolutions_product_detail" string="productdetail"/>
-                    <field name="paysolutions_cardtype" invisible="not paysolutions_cardtype"/>
-                    <field name="paysolutions_payment_status" string="status"/>
-                </group>
+            <xpath expr="//field[@name='state_message']/.." position="replace">
+                <notebook>
+                    <page string="Message Status" name="message_status" invisible="not state_message">
+                        <group>
+                            <field name="state_message" colspan="2" nolabel="1"/>
+                        </group>
+                    </page>
+
+                    <page string="PaySolutions Details" name="paysolutions_details" invisible="provider_code != 'paysolutions'">
+                        <group string="PaySolutions Response Data">
+                            <field name="paysolutions_payment_id" string="orderno"/>
+                            <field name="paysolutions_product_detail" string="productdetail"/>
+                            <field name="paysolutions_cardtype" invisible="not paysolutions_cardtype"/>
+                            <field name="paysolutions_payment_status" string="status"/>
+                        </group>
+                    </page>
+
+                    <page string="Logs" name="logs" groups="base.group_no_one" invisible="provider_code != 'paysolutions'">
+                        <field name="log_ids" readonly="1">
+                            <tree decoration-danger="level == 'error'"
+                                  decoration-warning="level == 'warning'">
+                                <field name="create_date"/>
+                                <field name="state_at_log"/>
+                                <field name="source"/>
+                                <field name="level"/>
+                                <field name="message"/>
+                            </tree>
+                        </field>
+                    </page>
+                </notebook>
             </xpath>
 
+        </field>
+    </record>
+
+    <record id="payment_transaction_search_paysolutions" model="ir.ui.view">
+        <field name="name">payment.transaction.search.paysolutions</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="payment.payment_transaction_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='state']" position="after">
+                <separator/>
+                <filter string="PaySolutions Only" 
+                        name="filter_paysolutions" 
+                        domain="[('provider_code', '=', 'paysolutions')]"/>
+                <filter string="Pending PaySolutions" 
+                        name="filter_pending_paysolutions" 
+                        domain="[('provider_code', '=', 'paysolutions'), ('state', '=', 'pending')]"/>
+                <filter string="Failed/Error PaySolutions" 
+                        name="filter_error_paysolutions" 
+                        domain="[('provider_code', '=', 'paysolutions'), ('state', 'in', ['error', 'cancel'])]"/>
+            </xpath>
+            <xpath expr="//field[@name='partner_name']" position="after">
+                <field name="paysolutions_refno" 
+                       string="PaySolutions Ref"
+                       filter_domain="[('paysolutions_refno', 'ilike', self)]"/>
+            </xpath>
         </field>
     </record>
 
