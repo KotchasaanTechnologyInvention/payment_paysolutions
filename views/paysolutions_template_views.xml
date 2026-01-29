@@ -7,6 +7,34 @@
         <field name="model">payment.provider</field>
         <field name="inherit_id" ref="payment.payment_provider_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="attributes">
+                <attribute name="invisible">code != 'paysolutions' and module_state != 'installed'</attribute>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_paysolutions_transactions"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-bar-chart"
+                        invisible="code != 'paysolutions'"
+                        help="View all PaySolutions transactions with statistics">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">PaySolutions</span>
+                        <span class="o_stat_text">Transactions</span>
+                    </div>
+                </button>
+                
+                <button name="action_check_pending_paysolutions_now"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-refresh"
+                        invisible="code != 'paysolutions'"
+                        help="Check status of all pending PaySolutions transactions now">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Check Status</span>
+                        <span class="o_stat_text">Now</span>
+                    </div>
+                </button>
+            </xpath>
             <xpath expr='//group[@name="provider_credentials"]' position='after'>
                 <group string="PaySolutions Configuration" invisible="code != 'paysolutions'">
                     <group>
@@ -21,8 +49,13 @@
                                placeholder="Contact staff for apikey"/>
                     </group>
                     <group>
+                        <field name="paysolutions_api_url"
+                               required="code == 'paysolutions' and state != 'disabled'"
+                               groups="base.group_no_one"
+                               placeholder="https://payments.paysolutions.asia"/>
                         <field name="paysolutions_payment_url"
                                required="code == 'paysolutions' and state != 'disabled'"
+                               groups="base.group_no_one"
                                placeholder="https://payments.paysolutions.asia/payment"/>
                         <field name="paysolutions_webhook_url" required="code == 'paysolutions' and state != 'disabled'"/>
                         <field name="paysolutions_return_url" required="code == 'paysolutions' and state != 'disabled'"/>
