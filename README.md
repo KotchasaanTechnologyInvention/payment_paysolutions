@@ -2,7 +2,6 @@
 
 A comprehensive payment gateway integration for PaySolutions, Thailand's leading payment service provider. Accept PromptPay QR, credit cards, internet banking, and e-wallets with seamless Odoo integration.
 
----
 
 ## Table of Contents
 
