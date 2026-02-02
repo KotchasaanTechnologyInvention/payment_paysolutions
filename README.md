@@ -12,7 +12,6 @@ A comprehensive payment gateway integration for PaySolutions, Thailand's leading
 - [Usage](#usage)
 - [Advanced Features](#advanced-features)
 - [Troubleshooting](#troubleshooting)
-- [Documentation](#documentation)
 - [Changelog](#changelog)
 - [Contributing](#contributing)
 - [License](#license)
@@ -539,22 +538,6 @@ When contacting support, provide the following information:
 - Module version (e.g., 18.0.1.0.0)
 - Detailed steps to reproduce the issue
 - PaySolutions merchant ID (last 4 digits only)
-
----
-
-## Documentation
-
-### Video Tutorials
-
-- **Module Installation**: [Installation Tutorial](https://youtu.be/installation-link)
-- **Basic Configuration**: [Configuration Tutorial](https://youtu.be/config-link)
-- **Advanced Features**: [Advanced Features Tutorial](https://youtu.be/features-link)
-
-### Developer Resources
-
-- **[PaySolutions API Documentation](https://api-docs.paysolutions.asia/)**: Official API reference
-- **[Module Technical Documentation](docs/TECHNICAL.md)**: Architecture and implementation details
-- **[Contributing Guidelines](CONTRIBUTING.md)**: Contribution procedures and standards
 
 ---
 
