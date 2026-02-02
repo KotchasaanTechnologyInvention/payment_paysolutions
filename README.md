@@ -70,7 +70,7 @@ A comprehensive payment Provider integration module for Pay Solution, supporting
 
 ## Support
 
-- **Documentation**: See module description page or [Docs](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions-18.0/blob/ec501180269803d121af0536f35d856aaff72cdb/Pay%20Solutions%20Integration%20Documentation.pdf).
+- **Documentation**: See module description page or [Docs](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions/blob/18.0/Pay%20Solutions%20Integration%20Documentation.pdf).
 - **PaySolutions API Docs**: https://api-docs.paysolutions.asia/
 - **Technical Support**: Contact PaySolutions merchant support
 - **Contact PaySolution Support Email**: support@paysolutions.asia
