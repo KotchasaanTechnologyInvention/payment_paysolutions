@@ -51,7 +51,6 @@ A comprehensive payment gateway integration for PaySolutions, Thailand's leading
 - **Test Mode Support**: Sandbox environment for development and testing
 - **Comprehensive Logging**: Complete transaction audit trail with webhook payload inspection
 
----
 
 ## Requirements
 
@@ -74,7 +73,6 @@ A comprehensive payment gateway integration for PaySolutions, Thailand's leading
 - Business registration in Thailand or Southeast Asia
 - Approved merchant status (approval time: 7-15 business days)
 
----
 
 ## Installation
 
@@ -128,7 +126,6 @@ sudo systemctl restart odoo
 
 **Video Tutorial**: [Module Installation Guide](https://youtu.be/KCGAKbVT92k)
 
----
 
 ## Configuration
 
@@ -232,7 +229,6 @@ For detailed explanation, see [Payment Account Configuration Guide](docs/AUTO_RE
    - **Next Execution Date**: Should display an upcoming timestamp
 7. Save the record
 
----
 
 ## Usage
 
@@ -340,7 +336,6 @@ Access from: Accounting → Customers → Payments or via PaySolutions Transacti
 
 For detailed information, see [Advanced Features Guide](docs/ADVANCED_FEATURES.md).
 
----
 
 ## Advanced Features
 
@@ -403,7 +398,6 @@ To verify cron job status:
 2. Search for: "PaySolutions: Check Pending Transactions"
 3. Verify "Active" checkbox is enabled
 
----
 
 ## Troubleshooting
 
