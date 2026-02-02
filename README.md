@@ -544,14 +544,6 @@ When contacting support, provide the following information:
 
 ## Documentation
 
-### User Documentation
-
-- **[Installation Guide](docs/INSTALLATION.md)**: Comprehensive installation instructions for all hosting environments
-- **[Configuration Guide](docs/CONFIGURATION.md)**: Step-by-step configuration procedures
-- **[Auto Reconciliation Setup](docs/AUTO_RECONCILIATION.md)**: Configuring automatic invoice reconciliation
-- **[Advanced Features](docs/ADVANCED_FEATURES.md)**: Monitoring tools and debugging capabilities
-- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)**: Common issues and resolution procedures
-
 ### Video Tutorials
 
 - **Module Installation**: [Installation Tutorial](https://youtu.be/installation-link)
