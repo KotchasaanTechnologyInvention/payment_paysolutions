@@ -121,7 +121,6 @@ sudo systemctl restart odoo
 2. Remove the "Apps" filter if the module is not visible
 3. Click the Install button
 
-**For detailed installation instructions**, refer to the [Installation Documentation](docs/INSTALLATION.md).
 
 **Video Tutorial**: [Module Installation Guide](https://youtu.be/KCGAKbVT92k)
 
@@ -207,7 +206,6 @@ The system automatically generates the following URLs:
 - Invoice status: Automatically updated to "Paid"
 - No manual reconciliation required
 
-For detailed explanation, see [Payment Account Configuration Guide](docs/AUTO_RECONCILIATION.md).
 
 ### Step 4: Activate Cron Job (Odoo 17.0 Only)
 
@@ -332,8 +330,6 @@ Access from: Accounting → Customers → Payments or via PaySolutions Transacti
 - Tracking transaction state changes
 - Debugging integration issues
 - Providing detailed information to support teams
-
-For detailed information, see [Advanced Features Guide](docs/ADVANCED_FEATURES.md).
 
 
 ## Advanced Features
@@ -539,7 +535,6 @@ When contacting support, provide the following information:
 - Detailed steps to reproduce the issue
 - PaySolutions merchant ID (last 4 digits only)
 
----
 
 ## Changelog
 
@@ -575,11 +570,10 @@ When contacting support, provide the following information:
 - 12-digit reference number generation
 - Proper authentication headers (merchantID, merchantSecretKey, apikey)
 
----
 
 ## Contributing
 
-Contributions to this module are welcome. Please refer to our [Contributing Guidelines](CONTRIBUTING.md) for detailed information.
+Contributions to this module are welcome.
 
 ### Ways to Contribute
 
@@ -597,7 +591,6 @@ Contributions to this module are welcome. Please refer to our [Contributing Guid
 4. Submit pull request with detailed description
 5. Address review comments
 
----
 
 ## Author
 
@@ -605,9 +598,8 @@ Contributions to this module are welcome. Please refer to our [Contributing Guid
 
 - Website: [https://kotchasaan.com](https://kotchasaan.com)
 - Email: info@kotchasaan.com
-- Location: Bangkok, Thailand
+- Location: Chiang Mai, Thailand
 
----
 
 ## License
 
@@ -622,7 +614,6 @@ See [LICENSE](LICENSE) file for complete license text.
 - Modified versions must disclose source code
 - Derivative works must use the same license (LGPL-3)
 
----
 
 ## Acknowledgments
 
@@ -630,7 +621,6 @@ See [LICENSE](LICENSE) file for complete license text.
 - **Odoo Community**: For the robust ERP platform and ecosystem
 - **Contributors**: For improvements and enhancements to this module
 
----
 
 ## Disclaimer
 
@@ -643,7 +633,6 @@ This module is provided "as is" without warranty of any kind, either expressed o
 
 The authors and contributors assume no liability for any damages or losses arising from the use of this module.
 
----
 
 ## Support and Contact Information
 
@@ -653,6 +642,7 @@ The authors and contributors assume no liability for any damages or losses arisi
 - Email: support@kotchasaan.com
 - Bug Reports: [GitHub Issues](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions/issues)
 - Website: [Kotchasaan](https://kotchasaan.com/)
+- **Documentation**: See module description page or [Docs](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions-18.0/blob/ec501180269803d121af0536f35d856aaff72cdb/Pay%20Solutions%20Integration%20Documentation.pdf).
 
 ### PaySolutions Account Support
 
