@@ -533,7 +533,6 @@ When contacting support, provide the following information:
 - Detailed steps to reproduce the issue
 - PaySolutions merchant ID (last 4 digits only)
 
----
 
 ## Changelog
 
@@ -574,7 +573,6 @@ Contributions to this module are welcome.
 4. Submit pull request with detailed description
 5. Address review comments
 
----
 
 ## Author
 
@@ -584,7 +582,6 @@ Contributions to this module are welcome.
 - Email: info@kotchasaan.com
 - Location: Chaing Mai, Thailand
 
----
 
 ## License
 
@@ -599,7 +596,6 @@ See [LICENSE](LICENSE) file for complete license text.
 - Modified versions must disclose source code
 - Derivative works must use the same license (LGPL-3)
 
----
 
 ## Acknowledgments
 
@@ -607,7 +603,6 @@ See [LICENSE](LICENSE) file for complete license text.
 - **Odoo Community**: For the robust ERP platform and ecosystem
 - **Contributors**: For improvements and enhancements to this module
 
----
 
 ## Disclaimer
 
