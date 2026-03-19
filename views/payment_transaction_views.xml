@@ -36,6 +36,8 @@
                             <field name="paysolutions_product_detail" string="productdetail"/>
                             <field name="paysolutions_cardtype" invisible="not paysolutions_cardtype"/>
                             <field name="paysolutions_payment_status" string="status"/>
+                            <field name="paysolutions_received_amount" string="Received Amount" 
+                                   widget="monetary" options="{'currency_field': 'currency_id'}"/>
                         </group>
                     </page>
 

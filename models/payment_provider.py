@@ -66,6 +66,12 @@ class PaymentProviderPaySolutions(models.Model):
         compute='_compute_paysolutions_return_url',
         readonly=True,
     )
+    paysolutions_writeoff_account_id = fields.Many2one(
+        'account.account',
+        string="Write-off Account (Gateway Fees)",
+        domain="[('deprecated', '=', False)]",
+        help="If this account is specified, any excess payment difference will be automatically posted to this account."
+    )
 
     # === COMPUTE METHODS ===
 
