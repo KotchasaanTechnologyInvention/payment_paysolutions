@@ -92,7 +92,7 @@ Download the module ZIP file from Odoo App Store or GitHub releases.
 
 ```bash
 cd /opt/odoo/custom/addons/
-unzip payment_paysolutions-19.0.1.0.0.zip
+unzip payment_paysolutions-19.X.X.X.X.zip
 ```
 
 #### Step 3: Set Permissions (Linux/Unix)
@@ -530,45 +530,48 @@ When contacting support, provide the following information:
 
 - Transaction reference number
 - Complete error messages from Logs tab (screenshots or text)
-- Odoo version (e.g., 18.0.1.0)
-- Module version (e.g., 18.0.1.0.0)
+- Odoo version (e.g., 19.X.X.X)
+- Module version (e.g., 19.X.2.X)
 - Detailed steps to reproduce the issue
 - PaySolutions merchant ID (last 4 digits only)
 
 
+### Developer Resources
+
+- **[PaySolutions API Documentation](https://api-docs.paysolutions.asia/)**: Official API reference
+
+
 ## Changelog
 
-### Version 19.0.1.0.0 (February 2, 2026)
-
-**Initial Release for Odoo 19.0**
+### Version 19.0.2.0.0 (March 19, 2026)
 
 #### Features
 
-**Payment Methods**:
-- PromptPay QR Code payment support
-- Credit/Debit Card processing (Visa, MasterCard, JCB, UnionPay, American Express)
-- Internet Banking integration with major Thai banks
-- E-Wallet support (TrueMoney Wallet, Alipay, WeChat Pay, PayPal)
-- Installment payment plans
+**Gateway Fee Handling & Reconciliation**:
+- Added `paysolutions_received_amount` field to store actual amount received from PaySolutions gateway
+- Reconciliation uses actual received amount instead of original transaction amount, preventing mismatch errors during auto-reconciliation
+- Amount difference detection with warning log when received amount differs from invoice amount (e.g., gateway fees included by PaySolutions)
+- Received Amount displayed in PaySolutions Details tab for easy verification
+- Merchants are notified to adjust fee differences manually in Odoo accounting
+- Comprehensive reconciliation logging with amount comparisons, difference details, and payment record references
+
+**Note**: Database migration required (`-u payment_paysolutions`) — new stored fields added
+
+### Version 19.0.1.1.0 (February 2, 2026)
+
+#### Features
 
 **Technical Capabilities**:
-- Multi-currency support: THB, USD, JPY, SGD, HKD, EUR, GBP, AUD, CHF
-- Multi-language interface: Thai, English, Japanese
-- Webhook-based payment confirmation
-- Configurable automatic invoice reconciliation
 - Quick action buttons (PaySolutions Transactions, Check Status Now)
 - Transaction monitoring tools (Verify Payment Status, Message Status, PaySolutions Details)
 - Developer Mode debugging capabilities (Logs tab with webhook payloads)
-- Automated pending transaction cleanup (15-minute intervals)
-- PCI DSS v4.0.1 compliance
 - Comprehensive logging and audit trail
 
-**Technical Implementation**:
-- Odoo 19.0 compatibility
-- Webhook-first architecture
-- Session-based transaction tracking
-- 12-digit reference number generation
-- Proper authentication headers (merchantID, merchantSecretKey, apikey)
+**Compatibility & Migration**:
+- Migration-ready architecture supporting upgrades from Odoo 17.0
+- Forward-compatible design prepared for Odoo 19.0
+- No breaking changes to core accounting or payment provider models during migration
+- Preserves existing transaction records and configuration data across version upgrades
 
 
 ## Contributing
@@ -605,8 +608,6 @@ Contributions to this module are welcome.
 
 This module is licensed under the GNU Lesser General Public License v3.0 (LGPL-3).
 
-See [LICENSE](LICENSE) file for complete license text.
-
 ### License Summary
 
 - Free to use, modify, and distribute
@@ -642,7 +643,7 @@ The authors and contributors assume no liability for any damages or losses arisi
 - Email: support@kotchasaan.com
 - Bug Reports: [GitHub Issues](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions/issues)
 - Website: [Kotchasaan](https://kotchasaan.com/)
-- **Documentation**: See module description page or [Docs](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions-18.0/blob/ec501180269803d121af0536f35d856aaff72cdb/Pay%20Solutions%20Integration%20Documentation.pdf).
+- **Documentation**: See module description page or [Docs](https://github.com/KotchasaanTechnologyInvention/payment_paysolutions-19.0/blob/ec501180269803d121af0536f35d856aaff72cdb/Pay%20Solutions%20Integration%20Documentation.pdf).
 
 ### PaySolutions Account Support
 

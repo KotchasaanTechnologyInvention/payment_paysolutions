@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Pay Solutions Payment Provider',
-    'version': '19.0.1.0.0',
+    'version': '19.0.2.0.0',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept payments via PaySolutions: Cards, PromptPay, Internet Banking, E-Wallets & Installments for Thai market',
     'description': """
@@ -87,8 +87,7 @@ Support
         'views/payment_transaction_views.xml',
     ],
     'images': [
-        'static/description/icon.png',
-        'static/description/images/main_screenshot.png'
+        'static/description/images/main_screenshot.gif'
     ],
     'post_init_hook': 'post_init_hook',
     'uninstall_hook': 'uninstall_hook',

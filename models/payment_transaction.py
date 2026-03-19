@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 class PaymentTransaction(models.Model):
-    _inherit = ['payment.transaction','mail.thread']
+    _inherit = 'payment.transaction'
 
     # === PAYSOLUTIONS-SPECIFIC FIELDS ===
 
@@ -44,6 +44,13 @@ class PaymentTransaction(models.Model):
     paysolutions_cardtype = fields.Char(
         string="PaySolutions Card Type",
         readonly=True
+    )
+
+    paysolutions_received_amount = fields.Monetary(
+        string="Amount Received from PaySolutions",
+        readonly=True,
+        currency_field='currency_id',
+        help="Actual amount received from PaySolutions (may include fees)"
     )
 
     log_ids = fields.One2many(
@@ -109,8 +116,7 @@ class PaymentTransaction(models.Model):
             _logger.info("Setting paysolutions_refno to existing reference: %s", self.paysolutions_refno)
 
         if self.state == 'draft':
-            self._set_pending()
-            self.message_post(body=_("PaySolutions payment initiated"))
+            self._set_pending(_("PaySolutions payment initiated"))
             self.write({
                 'provider_reference': self.paysolutions_refno,
             })
@@ -250,6 +256,16 @@ class PaymentTransaction(models.Model):
                 self.paysolutions_product_detail = webhook_data['productdetail']
             if 'cardtype' in webhook_data:
                 self.paysolutions_cardtype = webhook_data['cardtype']
+            if 'total' in webhook_data:
+                received_amount = float(webhook_data['total'])
+                self.write({
+                    'paysolutions_received_amount': received_amount
+                })
+                _logger.info(
+                    "PaySolutions received amount: %.2f (Invoice: %.2f, Difference: %.2f)",
+                    received_amount, self.amount, received_amount - self.amount
+                )
+
 
             self._add_log("Webhook received", source='webhook')
         
@@ -268,7 +284,6 @@ class PaymentTransaction(models.Model):
             _logger.error("Error processing PaySolutions webhook for %s: %s",
                         self.reference, e, exc_info=True)
             self._set_error(f"PaySolutions webhook processing error: {str(e)}")
-            self.message_post(body=f"PaySolutions webhook processing error: {str(e)}")
             self._add_log(
                 f"Webhook processing FAILED: {str(e)}", 
                 level='error', 
@@ -326,13 +341,13 @@ class PaymentTransaction(models.Model):
                 ))
 
         # Validate amount if present
-        if 'total' in webhook_data:
-            received_amount = float(webhook_data['total'])
-            if abs(received_amount - self.amount) > 0.01:  # Allow small floating point differences
-                raise ValidationError(_(
-                    "PaySolutions amount mismatch: expected %s, got %s",
-                    self.amount, received_amount
-                ))
+        # if 'total' in webhook_data:
+        #     received_amount = float(webhook_data['total'])
+        #     if abs(received_amount - self.amount) > 0.01:  # Allow small floating point differences
+        #         raise ValidationError(_(
+        #             "PaySolutions amount mismatch: expected %s, got %s",
+        #             self.amount, received_amount
+        #         ))
 
     # === PAYMENT STATE HANDLERS (INHERITED FROM MAIN STATE MANAGEMENT) ===
 
@@ -507,12 +522,30 @@ class PaymentTransaction(models.Model):
                 if order.invoice_ids:
                     for invoice in order.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
                         self._create_payment_for_invoice(invoice)
+
+        self._add_transaction_summary_log()
+
         return res
 
     def _create_payment_for_invoice(self, invoice):
         """Create account.payment and reconcile with invoice"""
-        if invoice.payment_state == 'paid':
+        if invoice.payment_state in ['paid','in_payment'] :
             return
+        
+        payment_amount = self.paysolutions_received_amount or self.amount
+        _logger.info(
+            "Creating payment for invoice %s: Amount=%.2f (Invoice: %.2f, Received: %.2f)",
+            invoice.name, payment_amount, invoice.amount_total, 
+            self.paysolutions_received_amount or 0
+        )
+
+        self._add_log(
+            f"Creating payment for Invoice {invoice.name}\n"
+            f"Invoice Amount: {invoice.amount_total:.2f} {self.currency_id.name}\n"
+            f"Payment Amount: {payment_amount:.2f} {self.currency_id.name}\n"
+            f"Transaction Amount: {self.amount:.2f} {self.currency_id.name}",
+            source='reconcile'
+        )
 
         try:
             # Create payment
@@ -520,7 +553,7 @@ class PaymentTransaction(models.Model):
                 'payment_type': 'inbound',
                 'partner_type': 'customer',
                 'partner_id': invoice.partner_id.id,
-                'amount': self.amount,
+                'amount': payment_amount,
                 'currency_id': self.currency_id.id,
                 'date': fields.Date.context_today(self),
                 'journal_id': self.provider_id.journal_id.id,
@@ -540,11 +573,59 @@ class PaymentTransaction(models.Model):
             lines_to_reconcile = payment_receivable_lines + invoice_receivable_lines
 
             if lines_to_reconcile:
-                lines_to_reconcile.reconcile()
-                _logger.info("PaySolutions: Invoice %s paid and reconciled", invoice.name)
+                difference = payment_amount - invoice.amount_total
+
+                log_message = (
+                    f"✅ Invoice {invoice.name} reconciled successfully\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Invoice Amount:  {invoice.amount_total:>10.2f} {self.currency_id.name}\n"
+                    f"Payment Amount:  {payment_amount:>10.2f} {self.currency_id.name}\n"
+                    f"Difference:      {difference:>10.2f} {self.currency_id.name}\n"
+                    f"Payment Record:  {payment.name}\n"
+                    f"Journal:         {payment.journal_id.name}"
+                )
+
+                if abs(difference) > 0.01:
+                    writeoff_acc = self.provider_id.paysolutions_writeoff_account_id
+
+                    lines_to_reconcile.reconcile(
+                        writeoff_acc_id=writeoff_acc.id,
+                        writeoff_journal_id=payment.journal_id.id,
+                        writeoff_label=f"PaySolutions Fee (Ref: {self.reference})"
+                    )
+                    log_message += (
+                        f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"✅ Automated Adjustment Successful\n"
+                        f"The difference of {difference:.2f} has been posted to account {writeoff_acc.code}."
+                    )
+                    _logger.info("PaySolutions: Auto write-off to %s", writeoff_acc.code)
+
+                    self._add_log(log_message, level='info', source='reconcile')
+                else:
+                    lines_to_reconcile.reconcile()
+                    if abs(difference) > 0.01:
+                        log_message += (
+                            f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"⚠️ Amount difference detected!\n"
+                            f"This may include payment gateway fees.\n"
+                            f"Please adjust manually in Odoo accounting."
+                        )
+                        self._add_log(log_message, level='info', source='reconcile')
+                        _logger.info("PaySolutions: Difference left for manual reconciliation")
+                    else:
+                        self._add_log(log_message, source='reconcile')
+                        _logger.info("PaySolutions: Reconciled successfully (No difference)")
 
         except Exception as e:
+            error_log = (
+                f"❌ Failed to create payment for invoice {invoice.name}\n"
+                f"Error: {str(e)}\n"
+                f"Invoice Amount: {invoice.amount_total:.2f} {self.currency_id.name}\n"
+                f"Payment Amount: {payment_amount:.2f} {self.currency_id.name}"
+            )
+            self._add_log(error_log, level='error', source='reconcile')
             _logger.error("Failed to create payment for invoice %s: %s", invoice.name, e)
+            raise
 
     def _get_payment_method_line(self):
         """Get payment method line for journal"""
@@ -579,10 +660,17 @@ class PaymentTransaction(models.Model):
                 error_msg = f"Payment verification failed after {timeout_minutes} minutes"
             
             self._set_error(_(error_msg))
-            self.message_post(body=_(error_msg))
             self._add_log(error_msg, level='error', source='cron')
             _logger.error("PaySolutions tx %s verification failed - result is None", self.reference)
             return
+
+        if 'total' in result:
+            received_amount = float(result['total'])
+            self.write({
+                'paysolutions_received_amount': received_amount,
+                'amount': received_amount,
+            })
+            self.env.cr.commit()
 
         status = result.get('status', '').upper()
         status_name = result.get('status_name', '')
@@ -597,8 +685,7 @@ class PaymentTransaction(models.Model):
             # Y = Completed (alternative)
             # TC = Test Complete
             if source == 'webhook':
-                self._set_done()
-                self.message_post(body=_("PaySolutions: Payment completed successfully"))
+                self._set_done(_("PaySolutions: Payment completed successfully"))
                 _logger.info(
                     "PaySolutions payment completed: %s (Status: %s, Payment ID: %s)",
                     self.reference, status_name, self.paysolutions_payment_id or 'N/A'
@@ -608,8 +695,7 @@ class PaymentTransaction(models.Model):
                     source='webhook'
                 )
             else:
-                self._set_done()
-                self.message_post(body=_("Payment verified via status check"))
+                self._set_done(_("Payment verified via status check"))
                 _logger.info("PaySolutions tx %s completed (verified by cron)", self.reference)
                 self._add_log(
                     f"Confirmed payment COMPLETED ({status} - {status_name})", 
@@ -623,8 +709,7 @@ class PaymentTransaction(models.Model):
             # PF = Payment Failed
             if source == 'webhook':
                 error_msg = result.get('message') or status_name or 'Payment rejected'
-                self._set_canceled()
-                self.message_post(body=_("PaySolutions: %s") % error_msg)
+                self._set_canceled(_("PaySolutions: %s") % error_msg)
                 _logger.warning(
                     "PaySolutions payment rejected: %s (Status: %s - %s)",
                     self.reference, status, error_msg
@@ -635,8 +720,7 @@ class PaymentTransaction(models.Model):
                     source='webhook'
                 )
             else:
-                self._set_canceled()
-                self.message_post(body=_("Payment rejected: %s") % (status_name or status))
+                self._set_canceled(_("Payment rejected: %s") % (status_name or status))
                 _logger.warning("PaySolutions tx %s timed out with status %s", self.reference, status)
                 self._add_log(
                     f"Marked CANCELLED ({status} - {status_name})", 
@@ -648,15 +732,13 @@ class PaymentTransaction(models.Model):
         elif status == 'C':
             # C = Cancel
             if source == 'webhook':
-                self._set_canceled()
-                self.message_post(body=_("PaySolutions: Payment cancelled by user"))
+                self._set_canceled(_("PaySolutions: Payment cancelled by user"))
                 _logger.info(
                     "PaySolutions payment cancelled: %s (Status: %s)",
                     self.reference, status_name
                 )
             else:
-                self._set_canceled()
-                self.message_post(body=_("Payment cancelled by user"))
+                self._set_canceled(_("Payment cancelled by user"))
                 _logger.warning("PaySolutions tx %s cancelled by user", self.reference)
 
         # REFUND STATUSES
@@ -665,15 +747,13 @@ class PaymentTransaction(models.Model):
             # VO = Voided
             # Note: Original payment was successful, now refunded
             if source == 'webhook':
-                self._set_done()
-                self.message_post(body=_("PaySolutions: Payment completed (later refunded)"))
+                self._set_done(_("PaySolutions: Payment completed (later refunded)"))
                 _logger.info(
                     "PaySolutions payment refunded: %s (Status: %s, Payment ID: %s)",
                     self.reference, status_name, self.paysolutions_payment_id or 'N/A'
                 )
             else:
-                self._set_done()
-                self.message_post(body=_("Payment completed (later refunded): %s") % status_name)
+                self._set_done(_("Payment completed (later refunded): %s") % status_name)
 
         # IN-PROGRESS / PENDING STATUSES
         elif status in ['NS', 'N', 'VC', 'RR', 'HO']:
@@ -683,8 +763,7 @@ class PaymentTransaction(models.Model):
             # RR = Request Refund (in progress)
             # HO = Hold (under review)
             if source == 'webhook':
-                self._set_pending()
-                self.message_post(body=_("PaySolutions: Payment in progress"))
+                self._set_pending(_("PaySolutions: Payment in progress"))
                 _logger.info(
                     "PaySolutions payment in progress: %s (Status: %s)",
                     self.reference, status_name
@@ -709,7 +788,6 @@ class PaymentTransaction(models.Model):
                     status, status_name, self.reference
                 )
                 self._set_error(_("PaySolutions: Unknown payment status: %s") % (status_name or status))
-                self.message_post(body=_("PaySolutions: Unknown payment status: %s") % (status_name or status))
                 self._add_log(
                     f"UNKNOWN STATUS received: {status} / {status_name}",
                     level='error',
@@ -718,7 +796,6 @@ class PaymentTransaction(models.Model):
             else:
                 error_msg = f"Payment not completed within {timeout_minutes} minutes. Status: {status_name or status}"
                 self._set_error(_(error_msg))
-                self.message_post(body=_(error_msg))
                 self._add_log(
                     f"UNKNOWN/ERROR STATUS: {status} / {status_name}", 
                     level='error', 
@@ -773,6 +850,81 @@ class PaymentTransaction(models.Model):
                 'sticky': False,
             }
         }
+    
+    def _add_transaction_summary_log(self):
+        """Add comprehensive transaction summary to log"""
+        self.ensure_one()
+        
+        # Gather all transaction data
+        invoice_info = "None"
+        if self.invoice_ids:
+            invoices = self.invoice_ids.mapped('name')
+            invoice_info = ', '.join(invoices)
+            total_invoice_amount = sum(self.invoice_ids.mapped('amount_total'))
+        else:
+            total_invoice_amount = 0
+        
+        so_info = "None"
+        if self.sale_order_ids:
+            orders = self.sale_order_ids.mapped('name')
+            so_info = ', '.join(orders)
+        
+        # Calculate amounts
+        tx_amount = self.amount
+        received_amount = self.paysolutions_received_amount or 0
+        difference = received_amount - tx_amount if received_amount else 0
+        
+        # Build comprehensive log
+        log_message = f"""
+    ═══════════════════════════════════════════════════════════
+    TRANSACTION SUMMARY: {self.reference}
+    ═══════════════════════════════════════════════════════════
+
+    BASIC INFO:
+    State:              {self.state}
+    Provider:           {self.provider_id.name}
+    Payment Method:     {self.payment_method_id.name if self.payment_method_id else 'N/A'}
+    Customer:           {self.partner_id.name}
+    Create Date:        {self.create_date}
+
+    AMOUNTS:
+    Transaction Amount: {tx_amount:>10.2f} {self.currency_id.name}
+    Received Amount:    {received_amount:>10.2f} {self.currency_id.name}
+    Difference:         {difference:>10.2f} {self.currency_id.name}
+    
+    RELATED DOCUMENTS:
+    Invoices:           {invoice_info}
+    Sale Orders:        {so_info}
+    Total Invoice Amt:  {total_invoice_amount:>10.2f} {self.currency_id.name}
+
+    PAYSOLUTIONS DATA:
+    RefNo:              {self.paysolutions_refno or 'N/A'}
+    Payment ID:         {self.paysolutions_payment_id or 'N/A'}
+    Status:             {self.paysolutions_payment_status or 'N/A'}
+    Card Type:          {self.paysolutions_cardtype or 'N/A'}
+    Product Detail:     {self.paysolutions_product_detail or 'N/A'}
+
+    STATUS:
+    State Message:      {self.state_message or 'N/A'}
+    Landing Route:      {self.landing_route or 'N/A'}
+
+    ═══════════════════════════════════════════════════════════
+    """
+        
+        # Add warning if there's amount difference
+        if abs(difference) > 0.01:
+            log_message += f"""
+    ⚠️ WARNING: Amount Mismatch Detected
+    Expected:  {tx_amount:.2f} {self.currency_id.name}
+    Received:  {received_amount:.2f} {self.currency_id.name}
+    Diff:      {difference:.2f} {self.currency_id.name}
+    
+    This may include payment gateway fees.
+    Manual adjustment required in Odoo accounting.
+    ═══════════════════════════════════════════════════════════
+    """
+        
+        self._add_log(log_message.strip(), source='summary')
 
 
 class PaymentTransactionLog(models.Model):
@@ -798,6 +950,8 @@ class PaymentTransactionLog(models.Model):
             ('return', 'Return'),
             ('redirect', 'Redirect'),
             ('api', 'API'),
+            ('reconcile', 'Reconcile'),
+            ('summary', 'Summary'),  
         ],
         default='api'
     )
