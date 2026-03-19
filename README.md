@@ -92,7 +92,7 @@ Download the module ZIP file from Odoo App Store or GitHub releases.
 
 ```bash
 cd /opt/odoo/custom/addons/
-unzip payment_paysolutions-18.0.1.0.0.zip
+unzip payment_paysolutions-18.0.2.0.0.zip
 ```
 
 #### Step 3: Set Permissions (Linux/Unix)
@@ -528,13 +528,32 @@ When contacting support, provide the following information:
 
 - Transaction reference number
 - Complete error messages from Logs tab (screenshots or text)
-- Odoo version (e.g., 18.0.1.0)
-- Module version (e.g., 18.0.1.0.0)
+- Odoo version (e.g., 18.0.2.0)
+- Module version (e.g., 18.0.2.0.0)
 - Detailed steps to reproduce the issue
 - PaySolutions merchant ID (last 4 digits only)
 
 
+### Developer Resources
+
+- **[PaySolutions API Documentation](https://api-docs.paysolutions.asia/)**: Official API reference
+
+
 ## Changelog
+
+### Version 18.0.2.0.0 (March 19, 2026)
+
+#### Features
+
+**Gateway Fee Handling & Reconciliation**:
+- Added `paysolutions_received_amount` field to store actual amount received from PaySolutions gateway
+- Reconciliation uses actual received amount instead of original transaction amount, preventing mismatch errors during auto-reconciliation
+- Amount difference detection with warning log when received amount differs from invoice amount (e.g., gateway fees included by PaySolutions)
+- Received Amount displayed in PaySolutions Details tab for easy verification
+- Merchants are notified to adjust fee differences manually in Odoo accounting
+- Comprehensive reconciliation logging with amount comparisons, difference details, and payment record references
+
+**Note**: Database migration required (`-u payment_paysolutions`) — new stored fields added
 
 ### Version 18.0.1.1.0 (February 2, 2026)
 
@@ -580,14 +599,12 @@ Contributions to this module are welcome.
 
 - Website: [https://kotchasaan.com](https://kotchasaan.com)
 - Email: info@kotchasaan.com
-- Location: Chaing Mai, Thailand
+- Location: Chiang Mai, Thailand
 
 
 ## License
 
 This module is licensed under the GNU Lesser General Public License v3.0 (LGPL-3).
-
-See [LICENSE](LICENSE) file for complete license text.
 
 ### License Summary
 
